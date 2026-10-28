@@ -2,6 +2,8 @@ package service
 
 import (
 	"image"
+	"image/color"
+	"image/draw"
 	"testing"
 
 	"onlineTest/internal/ai"
@@ -49,5 +51,24 @@ func TestImageCropRect(t *testing.T) {
 	}
 	if got := imageCropRect(bounds, ai.ImageBox{X: 0.9, Y: 0.9, W: 0.5, H: 0.5}); got != image.Rect(90, 180, 100, 200) {
 		t.Fatalf("clamped box = %v", got)
+	}
+}
+
+func TestGrowCropRectExpandsToFullFigure(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 200, 100))
+	draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.Point{}, draw.Src)
+	figure := image.Rect(40, 20, 160, 80)
+	draw.Draw(img, image.Rect(figure.Min.X, figure.Min.Y, figure.Max.X, figure.Min.Y+2), &image.Uniform{color.Black}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(figure.Min.X, figure.Max.Y-2, figure.Max.X, figure.Max.Y), &image.Uniform{color.Black}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(figure.Min.X, figure.Min.Y, figure.Min.X+2, figure.Max.Y), &image.Uniform{color.Black}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(figure.Max.X-2, figure.Min.Y, figure.Max.X, figure.Max.Y), &image.Uniform{color.Black}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(40, 4, 160, 8), &image.Uniform{color.Black}, image.Point{}, draw.Src)
+
+	got := growCropRect(img, image.Rect(40, 20, 120, 80))
+	if got.Max.X < figure.Max.X || got.Min.X > figure.Min.X || got.Min.Y > figure.Min.Y || got.Max.Y < figure.Max.Y {
+		t.Fatalf("crop %v cuts figure %v", got, figure)
+	}
+	if got.Min.Y <= 8 {
+		t.Fatalf("crop %v swallowed the text line above the figure", got)
 	}
 }

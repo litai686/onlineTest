@@ -79,6 +79,10 @@ func (s *Service) cropQuestionImage(ctx context.Context, source *domain.File, bo
 		return nil, fmt.Errorf("解码源图失败: %w", err)
 	}
 	rect := imageCropRect(img.Bounds(), box)
+	if rect.Empty() {
+		return nil, fmt.Errorf("裁剪区域过小")
+	}
+	rect = growCropRect(img, rect)
 	if rect.Dx() < 8 || rect.Dy() < 8 {
 		return nil, fmt.Errorf("裁剪区域过小")
 	}
@@ -126,6 +130,152 @@ func cropName(name string) string {
 		base = "question"
 	}
 	return base + "-figure.png"
+}
+
+const (
+	// AI 给出的图形框常常贴得过紧，直接裁剪会把图形边缘的线条切掉。
+	// 这里先把框扩展到与之相连的完整图形，再在不含墨迹的空白处留出白边。
+	cropPadPx       = 6
+	cropSearchRatio = 0.2
+	cropSearchMinPx = 64
+	cropInkLuma     = 210
+	cropInkFraction = 0.004
+)
+
+func growCropRect(img image.Image, rect image.Rectangle) image.Rectangle {
+	bounds := img.Bounds()
+	rect = rect.Intersect(bounds)
+	if rect.Empty() {
+		return rect
+	}
+	rect = expandToFigure(img, rect)
+	return padBlankSpace(img, rect, bounds)
+}
+
+// expandToFigure 把矩形扩展到覆盖与它相交的每个墨迹连通块，
+// 这样被 AI 框切开的图形线条会完整保留，而相邻的文字（独立连通块）不会被带进来。
+func expandToFigure(img image.Image, rect image.Rectangle) image.Rectangle {
+	bounds := img.Bounds()
+	marginX := max(int(math.Round(float64(bounds.Dx())*cropSearchRatio)), cropSearchMinPx)
+	marginY := max(int(math.Round(float64(bounds.Dy())*cropSearchRatio)), cropSearchMinPx)
+	win := image.Rect(rect.Min.X-marginX, rect.Min.Y-marginY, rect.Max.X+marginX, rect.Max.Y+marginY).Intersect(bounds)
+	w, h := win.Dx(), win.Dy()
+	if w <= 0 || h <= 0 {
+		return rect
+	}
+
+	ink := make([]bool, w*h)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			ink[y*w+x] = luma(img, win.Min.X+x, win.Min.Y+y) < cropInkLuma
+		}
+	}
+
+	seen := make([]bool, w*h)
+	stack := make([]int32, 0, 1024)
+	out := rect
+	for start := 0; start < len(ink); start++ {
+		if !ink[start] || seen[start] {
+			continue
+		}
+		seen[start] = true
+		stack = append(stack[:0], int32(start))
+		box := image.Rect(start%w, start/w, start%w+1, start/w+1)
+		for len(stack) > 0 {
+			cur := int(stack[len(stack)-1])
+			stack = stack[:len(stack)-1]
+			cx, cy := cur%w, cur/w
+			if cx < box.Min.X {
+				box.Min.X = cx
+			}
+			if cy < box.Min.Y {
+				box.Min.Y = cy
+			}
+			if cx+1 > box.Max.X {
+				box.Max.X = cx + 1
+			}
+			if cy+1 > box.Max.Y {
+				box.Max.Y = cy + 1
+			}
+			for dy := -1; dy <= 1; dy++ {
+				for dx := -1; dx <= 1; dx++ {
+					nx, ny := cx+dx, cy+dy
+					if nx < 0 || ny < 0 || nx >= w || ny >= h {
+						continue
+					}
+					ni := ny*w + nx
+					if !ink[ni] || seen[ni] {
+						continue
+					}
+					seen[ni] = true
+					stack = append(stack, int32(ni))
+				}
+			}
+		}
+		box = box.Add(win.Min)
+		if box.Overlaps(rect) {
+			out = out.Union(box)
+		}
+	}
+	return out.Intersect(bounds)
+}
+
+func padBlankSpace(img image.Image, rect, bounds image.Rectangle) image.Rectangle {
+	for i := 0; i < cropPadPx && rect.Max.X < bounds.Max.X; i++ {
+		if hasInkColumn(img, rect.Max.X, rect.Min.Y, rect.Max.Y) {
+			break
+		}
+		rect.Max.X++
+	}
+	for i := 0; i < cropPadPx && rect.Min.X > bounds.Min.X; i++ {
+		if hasInkColumn(img, rect.Min.X-1, rect.Min.Y, rect.Max.Y) {
+			break
+		}
+		rect.Min.X--
+	}
+	for i := 0; i < cropPadPx && rect.Max.Y < bounds.Max.Y; i++ {
+		if hasInkRow(img, rect.Max.Y, rect.Min.X, rect.Max.X) {
+			break
+		}
+		rect.Max.Y++
+	}
+	for i := 0; i < cropPadPx && rect.Min.Y > bounds.Min.Y; i++ {
+		if hasInkRow(img, rect.Min.Y-1, rect.Min.X, rect.Max.X) {
+			break
+		}
+		rect.Min.Y--
+	}
+	return rect
+}
+
+func hasInkColumn(img image.Image, x, y0, y1 int) bool {
+	return countInk(y1-y0, func(i int) int { return luma(img, x, y0+i) })
+}
+
+func hasInkRow(img image.Image, y, x0, x1 int) bool {
+	return countInk(x1-x0, func(i int) int { return luma(img, x0+i, y) })
+}
+
+func countInk(n int, at func(int) int) bool {
+	if n <= 0 {
+		return false
+	}
+	need := max(int(math.Round(float64(n)*cropInkFraction)), 1)
+	ink := 0
+	for i := 0; i < n; i++ {
+		if at(i) < cropInkLuma {
+			ink++
+			if ink >= need {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func luma(img image.Image, x, y int) int {
+	r, g, b, _ := img.At(x, y).RGBA()
+	return int((299*float64(r>>8) + 587*float64(g>>8) + 114*float64(b>>8)) / 1000)
 }
 
 func imageCropRect(bounds image.Rectangle, box ai.ImageBox) image.Rectangle {
