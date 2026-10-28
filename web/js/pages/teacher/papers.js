@@ -2,6 +2,7 @@ import { api } from "../../api.js";
 import { renderRich } from "../../components/math-render.js";
 import { createMathInput } from "../../components/math-input.js";
 import { createUploader } from "../../components/uploader.js";
+import { questionFigure } from "../../components/question-figure.js";
 import {
   el, clear, pageHeader, table, badge, modal, field, select, toast, errorText,
   confirmDialog, empty, sleep, fmtDate,
@@ -462,6 +463,7 @@ function questionPreview(q) {
       q.need_manual ? badge("待补答案", "amber") : null
     ),
     el("div", { class: "rich", dataset: { stem: q.id } }, el("span", { class: "muted" }, q.stem)),
+    questionFigure(q.source_image),
     q.options?.length ? el("div", { class: "options" }, ...q.options.map((o) => el("div", null, `${o.key}. ${o.text}`))) : null,
     el("div", { class: "answer-line muted small" }, "答案：", (q.answer || []).join("；") || "—")
   );
@@ -521,6 +523,7 @@ async function edit(root, params) {
       ),
       el("div", { class: "card-body" },
         el("div", { class: "rich stem-preview", dataset: { editStem: q.id } }, q.stem),
+        questionFigure(q.source_image),
         q.options?.length ? el("div", { class: "options" }, ...q.options.map((o) => el("div", null, `${o.key}. ${o.text}`))) : null,
         el("div", { class: "muted small" },
           `答案：${(q.answer || []).join("；") || "—"} · 难度：${q.difficulty} · 知识点：${(q.knowledge || []).join("、") || "—"}`
@@ -569,7 +572,11 @@ async function edit(root, params) {
   }
 
   async function removeQuestion(q) {
-    if (!(await confirmDialog(`删除第 ${q.seq} 题？`, { danger: true, confirmText: "删除" }))) return;
+    const ok = await confirmDialog(
+      `删除第 ${q.seq} 题？该题在未提交答卷中的作答记录也会一并清除。`,
+      { danger: true, confirmText: "删除" }
+    );
+    if (!ok) return;
     try {
       await api.del(`/papers/${paper.id}/questions/${q.id}`);
       const data = await api.get(`/papers/${paper.id}`);
@@ -577,8 +584,25 @@ async function edit(root, params) {
       renderList();
       toast("已删除", "success");
     } catch (err) {
-      toast(errorText(err), "error");
+      showQuestionDeleteError(err);
     }
+  }
+
+  function showQuestionDeleteError(err) {
+    const blocked = err?.status === 422 || err?.status === 409;
+    modal({
+      title: blocked ? "暂时无法删除该题" : "删除失败",
+      width: 440,
+      content: el("div", { class: "stack" },
+        el("p", null, blocked
+          ? "这道题已有学生提交的答卷，为避免影响成绩，系统没有删除。"
+          : "删除时遇到问题，请稍后重试。"),
+        blocked
+          ? el("p", { class: "muted small" }, "可以先编辑题目，或将试卷归档后再处理。")
+          : el("p", { class: "muted small" }, "如果多次失败，请刷新页面后再试。")
+      ),
+      actions: [{ text: "知道了", primary: true }],
+    });
   }
 
   function openQuestionForm(q) {

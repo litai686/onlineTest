@@ -25,6 +25,27 @@ go build -trimpath -o onlineTest ./cmd/server
 # http://127.0.0.1:8080
 ```
 
+Windows 下可一键交叉编译 Windows / Linux 两个平台：
+
+```powershell
+.\build.ps1
+# 仅构建指定平台/架构
+.\build.ps1 -Platforms windows -Architectures amd64,arm64
+# 构建前先跑测试
+.\build.ps1 -Test
+```
+
+支持参数：
+
+- `-Platforms windows,linux`：目标平台，默认同时构建 Windows 与 Linux
+- `-Architectures amd64,arm64`：目标架构，默认 `amd64`
+- `-Test`：构建前运行测试
+- `-NoStrip`：不添加 `-ldflags "-s -w"`（保留调试信息）
+- `-NoClean`：保留已有的目标目录，不删除旧产物
+- `-OutputDir`：自定义输出目录（默认 `dist`）
+
+构建使用 `CGO_ENABLED=0`、`-trimpath`、`-ldflags "-s -w"`，支持纯 Go 跨平台编译。默认输出 `dist/windows-amd64/onlineTest.exe` 与 `dist/linux-amd64/onlineTest`。
+
 首次启动会自动建库、写入初高中科目，并创建老师账号：
 
 - 用户名：`admin`
@@ -53,7 +74,7 @@ Windows 下也可以直接双击 `start.cmd`（会设置初始密码并启动）
 
 ## 配置
 
-优先级：命令行参数 > 环境变量 > `config.json` > 默认值。
+优先级：命令行参数 > 环境变量 > `config.yaml` > 默认值。
 
 | 参数 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- | --- |
@@ -62,7 +83,7 @@ Windows 下也可以直接双击 `start.cmd`（会设置初始密码并启动）
 | `-jwt-days` | `ONLINETEST_JWT_DAYS` | `30` | 登录有效期（天） |
 | `-upload-mb` | `ONLINETEST_UPLOAD_MB` | `20` | 单文件上传上限 |
 | `-log-level` | `ONLINETEST_LOG_LEVEL` | `info` | debug / info / warn / error |
-| `-config` | `ONLINETEST_CONFIG` | `./config.json` | 可选配置文件（见 `config.example.json`） |
+| `-config` | `ONLINETEST_CONFIG` | `./config.yaml` | 可选 YAML 配置文件（见 `config.example.yaml`，每个字段均有注释） |
 | — | `ONLINETEST_SECRET` | 自动生成 | JWT / API Key 加密主密钥；不设置时写入 `data/.secret`（0600） |
 | — | `ONLINETEST_ADMIN_PASSWORD` | 随机 | 首次启动创建 admin 时使用 |
 

@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -59,6 +60,15 @@ func Open(path string) (*gorm.DB, error) {
 
 func New(db *gorm.DB) *Store {
 	return &Store{db: db}
+}
+
+// IsForeignKeyErr reports whether err is a foreign key violation, which means
+// the row is still referenced by other tables.
+func IsForeignKeyErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "foreign key constraint failed")
 }
 
 func (s *Store) DB() *gorm.DB { return s.db }

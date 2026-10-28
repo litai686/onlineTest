@@ -1,5 +1,6 @@
 import { api } from "../../api.js";
 import { renderRich } from "../../components/math-render.js";
+import { questionFigure } from "../../components/question-figure.js";
 import { el, badge, toast, errorText, sleep, fmtDuration, pageHeader } from "../../utils.js";
 
 export async function render(root, params) {
@@ -97,6 +98,7 @@ function questionRow(q) {
       !graded ? badge("待阅", "amber") : null
     ),
     el("div", { class: "rich", dataset: { stem: q.id } }, q.stem),
+    questionFigure(q.source_image),
     el("div", { class: "answer-block" },
       el("span", { class: "muted small" }, "我的答案"), el("div", { class: "rich", dataset: { mine: q.id } }),
       q.correct_answer ? el("span", { class: "muted small" }, "参考答案") : null,

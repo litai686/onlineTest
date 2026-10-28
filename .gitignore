@@ -1,7 +1,9 @@
 /data/
 /.tmp/
+/dist/
 /onlineTest
 /onlineTest.exe
 /*.log
 /config.json
+/config.yaml
 *.exe~

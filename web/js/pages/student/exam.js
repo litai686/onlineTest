@@ -1,6 +1,7 @@
 import { api } from "../../api.js";
 import { renderRich } from "../../components/math-render.js";
 import { createMathInput } from "../../components/math-input.js";
+import { questionFigure } from "../../components/question-figure.js";
 import { store } from "../../store.js";
 import {
   el, clear, badge, toast, errorText, confirmDialog, sleep, debounce, fmtDuration, select,
@@ -211,6 +212,7 @@ export async function render(root, params) {
         el("span", { class: "muted small" }, `${q.score} 分`)
       ),
       el("div", { class: "rich stem", dataset: { stem: q.id } }, q.stem),
+      questionFigure(q.source_image),
       answerBlocks(q)
     );
     if (mode === "practice") {

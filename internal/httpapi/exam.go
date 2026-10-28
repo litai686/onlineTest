@@ -35,13 +35,14 @@ func attemptQuestionDTO(q *domain.Question) map[string]any {
 		options = domain.OptionList{}
 	}
 	out := map[string]any{
-		"id":         q.ID,
-		"seq":        q.Seq,
-		"type":       q.Type,
-		"stem":       q.Stem,
-		"options":    options,
-		"score":      q.Score,
-		"difficulty": q.Difficulty,
+		"id":           q.ID,
+		"seq":          q.Seq,
+		"type":         q.Type,
+		"stem":         q.Stem,
+		"options":      options,
+		"score":        q.Score,
+		"difficulty":   q.Difficulty,
+		"source_image": q.SourceImage,
 	}
 	if q.Type == "fill" {
 		blanks := len(q.Answer)

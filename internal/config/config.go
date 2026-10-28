@@ -1,23 +1,24 @@
 package config
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Addr          string `json:"addr"`
-	DataDir       string `json:"data_dir"`
-	JWTDays       int    `json:"jwt_days"`
-	UploadMB      int64  `json:"upload_mb"`
-	LogLevel      string `json:"log_level"`
-	MasterSecret  string `json:"-"`
-	AdminPassword string `json:"-"`
+	Addr          string `yaml:"addr"`
+	DataDir       string `yaml:"data_dir"`
+	JWTDays       int    `yaml:"jwt_days"`
+	UploadMB      int64  `yaml:"upload_mb"`
+	LogLevel      string `yaml:"log_level"`
+	MasterSecret  string `yaml:"-"`
+	AdminPassword string `yaml:"-"`
 }
 
 func Default() Config {
@@ -44,7 +45,7 @@ func Load(args []string) (Config, error) {
 	fs.StringVar(&addr, "addr", "", "listen address, e.g. :8080")
 	fs.StringVar(&dataDir, "data-dir", "", "data directory")
 	fs.StringVar(&logLevel, "log-level", "", "debug|info|warn|error")
-	fs.StringVar(&configPath, "config", "", "config json path")
+	fs.StringVar(&configPath, "config", "", "config yaml path")
 	fs.Int64Var(&jwtDays, "jwt-days", -1, "jwt validity in days")
 	fs.Int64Var(&uploadMB, "upload-mb", -1, "max upload size in MB")
 	if err := fs.Parse(args); err != nil {
@@ -58,11 +59,11 @@ func Load(args []string) (Config, error) {
 		path = os.Getenv("ONLINETEST_CONFIG")
 	}
 	if path == "" {
-		path = "./config.json"
+		path = "./config.yaml"
 	}
 	if b, err := os.ReadFile(path); err == nil {
 		var fromFile Config
-		if err := json.Unmarshal(b, &fromFile); err != nil {
+		if err := yaml.Unmarshal(b, &fromFile); err != nil {
 			return cfg, fmt.Errorf("parse config %s: %w", path, err)
 		}
 		if fromFile.Addr != "" {
@@ -80,7 +81,7 @@ func Load(args []string) (Config, error) {
 		if fromFile.LogLevel != "" {
 			cfg.LogLevel = fromFile.LogLevel
 		}
-	} else if path != "./config.json" && !os.IsNotExist(err) {
+	} else if path != "./config.yaml" && !os.IsNotExist(err) {
 		return cfg, fmt.Errorf("read config %s: %w", path, err)
 	}
 

@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
+	"regexp"
 	"strings"
 
 	"onlineTest/internal/ai"
@@ -78,8 +78,9 @@ func (s *Service) RunParseJob(ctx context.Context, job *domain.Job) error {
 			return fmt.Errorf("读取图片失败: %w", err)
 		}
 		images = append(images, imgPart{
-			Mime: f.Mime,
-			Data: base64.StdEncoding.EncodeToString(data),
+			FileID: f.ID,
+			Mime:   f.Mime,
+			Data:   base64.StdEncoding.EncodeToString(data),
 		})
 		pageNum++
 	}
@@ -146,6 +147,13 @@ func (s *Service) RunParseJob(ctx context.Context, job *domain.Job) error {
 			if err != nil {
 				return fmt.Errorf("第 %d 批识别失败: %w", i+1, err)
 			}
+			for j := range one.Questions {
+				idx := one.Questions[j].SourceIndex - 1
+				if idx < 0 || idx >= len(batch) {
+					idx = 0
+				}
+				one.Questions[j].SourceFile = batch[idx].FileID
+			}
 			if parsed.Title == "" {
 				parsed.Title = one.Title
 			}
@@ -165,6 +173,7 @@ func (s *Service) RunParseJob(ctx context.Context, job *domain.Job) error {
 		return fmt.Errorf("未识别到题目，请检查图片清晰度或更换识别模型")
 	}
 
+	s.attachQuestionImages(ctx, parsed.Questions)
 	questions := normalizeParsedQuestions(parsed.Questions)
 	replace := payload.Mode != "append"
 	paperMessage := ""
@@ -202,10 +211,8 @@ func (s *Service) RunParseJob(ctx context.Context, job *domain.Job) error {
 	case len(unresolved) > 0:
 		warn = "部分题目未能解析出答案：" + strings.Join(unresolved, "、")
 	}
-	if err := s.DeletePaperSourceFiles(ctx, paper.ID); err != nil {
-		slog.Warn("delete source files failed", "paper_id", paper.ID, "error", err)
-	} else {
-		paperMessage += "，原始文件已清理"
+	if len(images) > 0 {
+		paperMessage += "，原题图片已保留"
 	}
 	if filled > 0 {
 		paperMessage += fmt.Sprintf("，AI 已补全 %d 道答案", filled)
@@ -220,24 +227,31 @@ func (s *Service) RunParseJob(ctx context.Context, job *domain.Job) error {
 
 func (s *Service) SaveParsedPaper(ctx context.Context, paper *domain.Paper, questions []domain.Question, replace bool, sourceType string, parsed ai.ParsedPaper) (added int, skipped int, err error) {
 	err = s.Store.WithTx(func(tx *store.Store) error {
-		seen := make(map[string]bool, len(questions))
+		seen := make(map[string]int64, len(questions))
 		if !replace {
 			var existing []domain.Question
 			if err := tx.DB().WithContext(ctx).Where("paper_id = ?", paper.ID).Find(&existing).Error; err != nil {
 				return err
 			}
 			for i := range existing {
-				seen[questionSignature(existing[i])] = true
+				seen[questionSignature(existing[i])] = existing[i].ID
 			}
 		}
 		kept := make([]domain.Question, 0, len(questions))
 		for i := range questions {
 			sig := questionSignature(questions[i])
-			if seen[sig] {
+			if id, ok := seen[sig]; ok {
+				if id > 0 && strings.TrimSpace(questions[i].SourceImage) != "" {
+					if err := tx.DB().WithContext(ctx).Model(&domain.Question{}).
+						Where("id = ? AND source_image = ''", id).
+						Update("source_image", questions[i].SourceImage).Error; err != nil {
+						return err
+					}
+				}
 				skipped++
 				continue
 			}
-			seen[sig] = true
+			seen[sig] = 0
 			kept = append(kept, questions[i])
 		}
 		questions = kept
@@ -297,8 +311,9 @@ func (s *Service) SaveParsedPaper(ctx context.Context, paper *domain.Paper, ques
 }
 
 type imgPart struct {
-	Mime string
-	Data string
+	FileID string
+	Mime   string
+	Data   string
 }
 
 func chunkImages(items []imgPart, size int) [][]imgPart {
@@ -336,7 +351,7 @@ func normalizeParsedQuestions(in []ai.ParsedQuestion) []domain.Question {
 	seq := 0
 	for _, q := range in {
 		typ := normalizeType(q.Type)
-		stem := strings.TrimSpace(q.Stem)
+		stem := stripQuestionNumber(strings.TrimSpace(q.Stem))
 		if stem == "" {
 			continue
 		}
@@ -392,6 +407,7 @@ func normalizeParsedQuestions(in []ai.ParsedQuestion) []domain.Question {
 			Analysis:     strings.TrimSpace(q.Analysis),
 			Knowledge:    knowledge,
 			Difficulty:   difficulty,
+			SourceImage:  strings.TrimSpace(q.SourceFile),
 			AIConfidence: clamp01(q.Confidence),
 			NeedManual:   needManual,
 			GradingMode:  mode,
@@ -413,6 +429,12 @@ func normalizeType(t string) string {
 	default:
 		return "short"
 	}
+}
+
+var leadingQuestionNumber = regexp.MustCompile(`^\s*(?:第\s*[0-9一二三四五六七八九十]+\s*题\s*[.、:：]?|[（(]\s*[0-9一二三四五六七八九十]+\s*[）)]|[0-9]+\s*[.、)]|[一二三四五六七八九十]+\s*[、.])\s*`)
+
+func stripQuestionNumber(stem string) string {
+	return leadingQuestionNumber.ReplaceAllString(stem, "")
 }
 
 func clamp01(v float64) float64 {

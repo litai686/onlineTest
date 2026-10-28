@@ -2,12 +2,15 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"onlineTest/internal/domain"
 
 	"gorm.io/gorm"
 )
+
+var ErrQuestionInUse = errors.New("question has submitted answers")
 
 func (s *Store) CreateFile(ctx context.Context, f *domain.File) error {
 	return s.db.WithContext(ctx).Create(f).Error
@@ -55,6 +58,13 @@ func (s *Store) StudentCanReadFile(ctx context.Context, fileID string, studentID
 	err := s.db.WithContext(ctx).Table("paper_files pf").
 		Joins("JOIN attempts a ON a.paper_id = pf.paper_id").
 		Where("pf.file_id = ? AND a.student_id = ?", fileID, studentID).
+		Count(&n).Error
+	if err != nil || n > 0 {
+		return n > 0, err
+	}
+	err = s.db.WithContext(ctx).Table("questions q").
+		Joins("JOIN attempts a ON a.paper_id = q.paper_id").
+		Where("q.source_image = ? AND a.student_id = ?", fileID, studentID).
 		Count(&n).Error
 	return n > 0, err
 }
@@ -181,6 +191,13 @@ func (s *Store) GetQuestion(ctx context.Context, id int64) (*domain.Question, er
 	return &q, nil
 }
 
+// CountQuestionsByImage 统计仍引用某张图片的题目数量，用于判断图片是否可以清理。
+func (s *Store) CountQuestionsByImage(ctx context.Context, fileID string) (int64, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Model(&domain.Question{}).Where("source_image = ?", fileID).Count(&n).Error
+	return n, err
+}
+
 func (s *Store) CreateQuestion(ctx context.Context, q *domain.Question) error {
 	return s.WithTx(func(tx *Store) error {
 		var maxSeq int
@@ -217,7 +234,26 @@ func (s *Store) DeleteQuestion(ctx context.Context, id int64) error {
 		return err
 	}
 	return s.WithTx(func(tx *Store) error {
+		var submittedAnswers int64
+		if err := tx.db.WithContext(ctx).Table("attempt_answers aa").
+			Joins("JOIN attempts a ON a.id = aa.attempt_id").
+			Where("aa.question_id = ? AND a.status <> ?", id, "in_progress").
+			Count(&submittedAnswers).Error; err != nil {
+			return err
+		}
+		if submittedAnswers > 0 {
+			return ErrQuestionInUse
+		}
+		if err := tx.db.WithContext(ctx).Where("question_id = ?", id).Delete(&domain.AttemptAnswer{}).Error; err != nil {
+			if IsForeignKeyErr(err) {
+				return ErrQuestionInUse
+			}
+			return err
+		}
 		if err := tx.db.WithContext(ctx).Delete(&domain.Question{}, id).Error; err != nil {
+			if IsForeignKeyErr(err) {
+				return ErrQuestionInUse
+			}
 			return err
 		}
 		var rest []domain.Question
@@ -296,4 +332,11 @@ func (s *Store) PaperFileHashes(ctx context.Context, paperID int64) (map[string]
 
 func (s *Store) DeleteFile(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.File{}, "id = ?", id).Error
+}
+
+// CountPaperFilesByFile 统计仍引用某个文件的试卷附件数量。
+func (s *Store) CountPaperFilesByFile(ctx context.Context, fileID string) (int64, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Model(&domain.PaperFile{}).Where("file_id = ?", fileID).Count(&n).Error
+	return n, err
 }

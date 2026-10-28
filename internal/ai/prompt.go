@@ -12,11 +12,14 @@ const parseSystem = `你是一名严谨的试卷数字化助手。请把图片�
 1. 只输出一个 JSON 对象，不要 markdown 代码块，不要任何解释文字。
 2. 数学公式一律用 LaTeX：行内 $...$，独立公式 $$...$$；中文原样保留，不要翻译。
 3. 题型取值：single(单选)、multiple(多选)、judge(判断)、fill(填空)、short(解答/计算/证明/简答)。
-4. 每一题字段：seq(从1开始)、type、stem、options([{"key":"A","text":"..."}])、answer(字符串数组)、score、analysis、knowledge(字符串数组)、difficulty(easy|medium|hard)、confidence(0~1)、need_manual(bool)。
-5. 单选 answer 只含一个选项 key；多选含全部正确 key；判断为 ["true"] 或 ["false"]；填空按空位顺序；解答题 answer 为参考答案全文或 []。
-6. 卷面没有答案时 answer 给 []，need_manual 置 true，绝对不要编造答案。
-7. 分值按卷面标注；无法识别时按常见分值估计，并把 confidence 降低。
-8. 跳过页眉、页脚、页码、考生信息、答题卡说明。
+4. 每一题字段：seq(从1开始)、type、stem、options([{"key":"A","text":"..."}])、answer(字符串数组)、score、analysis、knowledge(字符串数组)、difficulty(easy|medium|hard)、confidence(0~1)、need_manual(bool)、source_index(题目所在图片在本批图片中的序号，从1开始；纯文本/PDF 为0)、bbox(本题区域)、figure(可选，图形区域)。
+5. stem 从题干正文开始，不要包含题号；原图有“3.”“（3）”等题号时由系统单独显示，不要写进 stem。
+6. 单选 answer 只含一个选项 key；多选含全部正确 key；判断为 ["true"] 或 ["false"]；填空按空位顺序；解答题 answer 为参考答案全文或 []。
+7. 卷面没有答案时 answer 给 []，need_manual 置 true，绝对不要编造答案。
+8. 分值按卷面标注；无法识别时按常见分值估计，并把 confidence 降低。
+9. 跳过页眉、页脚、页码、考生信息、答题卡说明。
+10. 几何图形、函数图像等不要用文字臆造或省略；题干保留“如图”等原文。
+11. bbox 是本题在图片中的矩形，格式 {"x":0.0,"y":0.0,"w":0.0,"h":0.0}，坐标为相对整张图片的 0~1 比例；区域从题干正文开始（不含题号），到本题结束。图形题另给 figure，格式相同，只框图形本身，不含题号和文字；没有图形时省略 figure。坐标宁可略小，不要框进上一题或下一题。
 JSON 结构：{"title":"","stage":"junior|senior","grade":"","subject":"","duration_min":0,"total_score":0,"questions":[...]}`
 
 const gradeSystem = `你是初中/高中数学阅卷老师，请根据题目、参考答案、解析和学生答案评分。
@@ -92,17 +95,28 @@ func ReportMessages(payload any) ([]Message, error) {
 }
 
 type ParsedQuestion struct {
-	Seq        int          `json:"seq"`
-	Type       string       `json:"type"`
-	Stem       string       `json:"stem"`
-	Options    []OptionJSON `json:"options"`
-	Answer     []string     `json:"answer"`
-	Score      float64      `json:"score"`
-	Analysis   string       `json:"analysis"`
-	Knowledge  []string     `json:"knowledge"`
-	Difficulty string       `json:"difficulty"`
-	Confidence float64      `json:"confidence"`
-	NeedManual bool         `json:"need_manual"`
+	Seq         int          `json:"seq"`
+	Type        string       `json:"type"`
+	Stem        string       `json:"stem"`
+	Options     []OptionJSON `json:"options"`
+	Answer      []string     `json:"answer"`
+	Score       float64      `json:"score"`
+	Analysis    string       `json:"analysis"`
+	Knowledge   []string     `json:"knowledge"`
+	Difficulty  string       `json:"difficulty"`
+	Confidence  float64      `json:"confidence"`
+	NeedManual  bool         `json:"need_manual"`
+	SourceIndex int          `json:"source_index"`
+	SourceFile  string       `json:"-"`
+	BBox        *ImageBox    `json:"bbox"`
+	Figure      *ImageBox    `json:"figure"`
+}
+
+type ImageBox struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
 }
 
 type OptionJSON struct {

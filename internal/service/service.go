@@ -149,6 +149,76 @@ func (s *Service) RemoveUpload(ctx context.Context, f *domain.File) {
 	_ = s.Store.DeleteFile(ctx, f.ID)
 }
 
+// DeleteQuestion 删除题目，并清理不再被任何题目/试卷引用的配图（数据库记录与磁盘文件）。
+func (s *Service) DeleteQuestion(ctx context.Context, id int64) error {
+	var image *domain.File
+	if q, err := s.Store.GetQuestion(ctx, id); err == nil && q.SourceImage != "" {
+		if f, ferr := s.Store.GetFile(ctx, q.SourceImage); ferr == nil {
+			image = f
+		}
+	}
+	if err := s.Store.DeleteQuestion(ctx, id); err != nil {
+		return err
+	}
+	s.removeFileIfUnused(ctx, image)
+	return nil
+}
+
+// DeletePaper 删除试卷，并清理试卷源文件与题目配图。
+func (s *Service) DeletePaper(ctx context.Context, id int64) error {
+	links, err := s.Store.PaperFiles(ctx, id)
+	if err != nil {
+		return err
+	}
+	questions, err := s.Store.ListQuestions(ctx, id)
+	if err != nil {
+		return err
+	}
+	files := make([]*domain.File, 0, len(links)+len(questions))
+	seen := make(map[string]bool, len(links)+len(questions))
+	collect := func(fileID string) {
+		if fileID == "" || seen[fileID] {
+			return
+		}
+		f, err := s.Store.GetFile(ctx, fileID)
+		if err != nil {
+			return
+		}
+		seen[fileID] = true
+		files = append(files, f)
+	}
+	for _, link := range links {
+		collect(link.FileID)
+	}
+	for i := range questions {
+		collect(questions[i].SourceImage)
+	}
+	if err := s.Store.DeletePaper(ctx, id); err != nil {
+		return err
+	}
+	for _, f := range files {
+		s.removeFileIfUnused(ctx, f)
+	}
+	return nil
+}
+
+// removeFileIfUnused 在没有其他题目或试卷引用该文件时，删除文件记录与磁盘文件。
+func (s *Service) removeFileIfUnused(ctx context.Context, f *domain.File) {
+	if f == nil {
+		return
+	}
+	if n, err := s.Store.CountQuestionsByImage(ctx, f.ID); err != nil || n > 0 {
+		return
+	}
+	if n, err := s.Store.CountPaperFilesByFile(ctx, f.ID); err != nil || n > 0 {
+		return
+	}
+	if err := s.Store.DeleteFile(ctx, f.ID); err != nil {
+		return
+	}
+	_ = os.Remove(s.FilePath(f))
+}
+
 func (s *Service) DeletePaperSourceFiles(ctx context.Context, paperID int64) error {
 	links, err := s.Store.PaperFiles(ctx, paperID)
 	if err != nil {

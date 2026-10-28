@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -273,7 +274,7 @@ func (a *App) deletePaper(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, invalidState("该试卷已有作答记录，不能删除，可归档"))
 		return
 	}
-	if err := a.Store.DeletePaper(r.Context(), id); err != nil {
+	if err := a.Svc.DeletePaper(r.Context(), id); err != nil {
 		writeError(w, r, err)
 		return
 	}
@@ -699,7 +700,11 @@ func (a *App) deleteQuestion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, notFound("题目不存在"))
 		return
 	}
-	if err := a.Store.DeleteQuestion(r.Context(), qid); err != nil {
+	if err := a.Svc.DeleteQuestion(r.Context(), qid); err != nil {
+		if errors.Is(err, store.ErrQuestionInUse) {
+			writeError(w, r, invalidState("这道题已有学生提交的答卷，不能删除"))
+			return
+		}
 		writeError(w, r, err)
 		return
 	}

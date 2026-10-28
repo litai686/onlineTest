@@ -295,6 +295,11 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .progress-bar { height: 100%; background: linear-gradient(90deg, #60a5fa, #2563eb); transition: width 0.4s; }
 .question-edit .card-body { display: flex; flex-direction: column; gap: 8px; }
 .stem-preview { font-size: 0.95rem; }
+.question-figure { margin: 10px 0 4px; }
+.question-figure-img { display: block; max-width: 100%; max-height: 300px; border: 1px solid var(--border); border-radius: 10px; background: #fff; cursor: zoom-in; }
+.question-figure.is-loading .question-figure-img { display: none; }
+.question-figure.is-failed .question-figure-img { display: none; }
+.question-figure figcaption { margin-top: 4px; }
 
 .math-input { display: flex; flex-direction: column; gap: 8px; }
 .math-toolbar { display: flex; flex-wrap: wrap; gap: 5px; }

@@ -38,7 +38,9 @@ async function request(method, path, { body, form, query } = {}) {
       store.logout();
       if (location.hash !== "#/login") location.hash = "#/login";
     }
-    const err = new Error(data?.message || `请求失败（${res.status}）`);
+    const fallback = res.status >= 500 ? "服务器繁忙，请稍后再试" : `请求失败（${res.status}）`;
+    const raw = data?.message || "";
+    const err = new Error(!raw || raw === "服务器内部错误" ? fallback : raw);
     err.code = data?.code;
     err.status = res.status;
     err.data = data?.data;

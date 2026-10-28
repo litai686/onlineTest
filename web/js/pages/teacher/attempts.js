@@ -1,5 +1,6 @@
 import { api } from "../../api.js";
 import { renderRich } from "../../components/math-render.js";
+import { questionFigure } from "../../components/question-figure.js";
 import { el, pageHeader, table, badge, modal, field, select, toast, errorText, fmtDate } from "../../utils.js";
 
 export async function render(root) {
@@ -128,6 +129,7 @@ export async function render(root) {
         badge(q.grading_mode === "ai" ? "AI 阅卷" : q.grading_mode === "manual" ? "人工" : "自动", "gray")
       ),
       el("div", { class: "rich", dataset: { qStem: q.id } }, q.stem),
+      questionFigure(q.source_image),
       el("div", { class: "answer-block" },
         el("span", { class: "muted small" }, "学生答案"), el("div", { class: "rich", dataset: { qMine: q.id } }),
         el("span", { class: "muted small" }, "参考答案"), el("div", { class: "rich", dataset: { qCorrect: q.id } })
