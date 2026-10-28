@@ -232,7 +232,7 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .options { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
 .answer-line { margin-top: 6px; }
 .rich { line-height: 1.85; word-break: break-word; }
-.rich .math-inline { display: inline-block; margin: 0 2px; }
+.rich .math-inline, .rich-inline .math-inline { display: inline-block; margin: 0 2px; }
 .rich .math-block { overflow-x: auto; margin: 6px 0; }
 .math-fallback { font-family: var(--mono); background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
 
@@ -300,6 +300,22 @@ textarea.input { resize: vertical; line-height: 1.55; }
 .question-figure.is-loading .question-figure-img { display: none; }
 .question-figure.is-failed .question-figure-img { display: none; }
 .question-figure figcaption { margin-top: 4px; }
+.lightbox-overlay {
+  position: fixed; inset: 0; z-index: 300; padding: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 16, 28, 0.78); cursor: zoom-out; overflow: auto;
+}
+.lightbox-panel { position: relative; display: flex; flex-direction: column; }
+.lightbox-img { display: block; height: 600px; max-width: min(92vw, 1100px); object-fit: contain; border-radius: 10px; background: #fff; cursor: zoom-out; }
+.lightbox-close {
+  position: absolute; top: -14px; right: -14px; width: 32px; height: 32px;
+  border-radius: 50%; background: #fff; color: var(--text); box-shadow: var(--shadow);
+  font-size: 1.1rem; line-height: 1;
+}
+@media (max-height: 760px), (max-width: 720px) {
+  .lightbox-img { height: 78vh; }
+  .lightbox-close { top: -10px; right: -6px; }
+}
 
 .math-input { display: flex; flex-direction: column; gap: 8px; }
 .math-toolbar { display: flex; flex-wrap: wrap; gap: 5px; }

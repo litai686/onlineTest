@@ -1,5 +1,5 @@
 import { api } from "../../api.js";
-import { renderRich } from "../../components/math-render.js";
+import { renderRich, richInline } from "../../components/math-render.js";
 import { createMathInput } from "../../components/math-input.js";
 import { createUploader } from "../../components/uploader.js";
 import { questionFigure } from "../../components/question-figure.js";
@@ -464,13 +464,19 @@ function questionPreview(q) {
     ),
     el("div", { class: "rich", dataset: { stem: q.id } }, el("span", { class: "muted" }, q.stem)),
     questionFigure(q.source_image),
-    q.options?.length ? el("div", { class: "options" }, ...q.options.map((o) => el("div", null, `${o.key}. ${o.text}`))) : null,
-    el("div", { class: "answer-line muted small" }, "答案：", (q.answer || []).join("；") || "—")
+    q.options?.length ? optionList(q.options) : null,
+    el("div", { class: "answer-line muted small" }, "答案：", richInline((q.answer || []).join("；") || "—"))
   );
 }
 
 function typeText(t) {
   return { single: "单选", multiple: "多选", judge: "判断", fill: "填空", short: "解答" }[t] || t;
+}
+
+function optionList(options) {
+  return el("div", { class: "options" },
+    ...options.map((o) => el("div", { class: "option-line" }, `${o.key}. `, richInline(o.text)))
+  );
 }
 
 async function edit(root, params) {
@@ -524,9 +530,10 @@ async function edit(root, params) {
       el("div", { class: "card-body" },
         el("div", { class: "rich stem-preview", dataset: { editStem: q.id } }, q.stem),
         questionFigure(q.source_image),
-        q.options?.length ? el("div", { class: "options" }, ...q.options.map((o) => el("div", null, `${o.key}. ${o.text}`))) : null,
+        q.options?.length ? optionList(q.options) : null,
         el("div", { class: "muted small" },
-          `答案：${(q.answer || []).join("；") || "—"} · 难度：${q.difficulty} · 知识点：${(q.knowledge || []).join("、") || "—"}`
+          "答案：", richInline((q.answer || []).join("；") || "—"),
+          ` · 难度：${q.difficulty} · 知识点：${(q.knowledge || []).join("、") || "—"}`
         )
       )
     );

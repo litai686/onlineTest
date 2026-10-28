@@ -80,13 +80,24 @@ try {
     foreach ($targetOs in $targetPlatforms) {
         foreach ($targetArch in $targetArchs) {
             $targetDir = Join-Path $outRoot "$targetOs-$targetArch"
-            if (-not $NoClean -and (Test-Path -LiteralPath $targetDir)) {
-                Remove-Item -LiteralPath $targetDir -Recurse -Force
-            }
-            New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
-
             $fileName = if ($targetOs -eq "windows") { "onlineTest.exe" } else { "onlineTest" }
             $output = Join-Path $targetDir $fileName
+            if (-not $NoClean -and (Test-Path -LiteralPath $output)) {
+                try {
+                    Remove-Item -LiteralPath $output -Force
+                }
+                catch {
+                    $holders = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+                        try { $_.Path -eq $output } catch { $false }
+                    })
+                    if ($holders.Count -gt 0) {
+                        $ids = ($holders | ForEach-Object { $_.Id }) -join ", "
+                        throw "目标文件正在运行（PID $ids），无法覆盖。请先停止服务再构建：Stop-Process -Id $ids"
+                    }
+                    throw
+                }
+            }
+            New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 
             $env:GOOS = $targetOs
             $env:GOARCH = $targetArch

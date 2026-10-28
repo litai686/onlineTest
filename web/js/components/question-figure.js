@@ -1,4 +1,4 @@
-import { fetchBlob, openProtected } from "../api.js";
+import { fetchBlob } from "../api.js";
 import { el } from "../utils.js";
 
 const urls = new Map();
@@ -16,6 +16,32 @@ function load(fileId) {
   return urls.get(fileId);
 }
 
+function openLightbox(image, label) {
+  const src = image.currentSrc || image.getAttribute("src");
+  if (!src) return;
+  const onKey = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    }
+  };
+  const close = () => {
+    window.removeEventListener("keydown", onKey, true);
+    overlay.remove();
+  };
+  const overlay = el("div", { class: "lightbox-overlay", role: "dialog", "aria-label": label, tabindex: "-1" },
+    el("div", { class: "lightbox-panel" },
+      el("img", { class: "lightbox-img", src, alt: label, title: "点击关闭" }),
+      el("button", { class: "icon-btn lightbox-close", type: "button", "aria-label": "关闭", onclick: close }, "×")
+    )
+  );
+  overlay.addEventListener("click", close);
+  window.addEventListener("keydown", onKey, true);
+  document.body.append(overlay);
+  overlay.focus();
+}
+
 export function questionFigure(fileId, { label = "题目配图" } = {}) {
   if (!fileId) return null;
   const caption = el("figcaption", { class: "muted small" }, "题目配图加载中…");
@@ -24,10 +50,7 @@ export function questionFigure(fileId, { label = "题目配图" } = {}) {
     image,
     caption
   );
-  image.addEventListener("click", () => {
-    if (!image.getAttribute("src")) return;
-    openProtected(`/api/v1/files/${encodeURIComponent(fileId)}`).catch(() => {});
-  });
+  image.addEventListener("click", () => openLightbox(image, label));
   load(fileId).then((url) => {
     image.src = url;
     figure.classList.remove("is-loading");

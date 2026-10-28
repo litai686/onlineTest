@@ -41,7 +41,7 @@ Windows 下可一键交叉编译 Windows / Linux 两个平台：
 - `-Architectures amd64,arm64`：目标架构，默认 `amd64`
 - `-Test`：构建前运行测试
 - `-NoStrip`：不添加 `-ldflags "-s -w"`（保留调试信息）
-- `-NoClean`：保留已有的目标目录，不删除旧产物
+- `-NoClean`：保留目标目录里已有的同名二进制，直接覆盖
 - `-OutputDir`：自定义输出目录（默认 `dist`）
 
 构建使用 `CGO_ENABLED=0`、`-trimpath`、`-ldflags "-s -w"`，支持纯 Go 跨平台编译。默认输出 `dist/windows-amd64/onlineTest.exe` 与 `dist/linux-amd64/onlineTest`。
@@ -70,7 +70,7 @@ onlineTest.exe
 ONLINETEST_ADMIN_PASSWORD=admin123 ./onlineTest.exe
 ```
 
-Windows 下也可以直接双击 `start.cmd`（会设置初始密码并启动）。若 `data/` 已存在，环境变量不会修改已有账号密码。
+Windows 下也可以直接运行 `.\start.ps1`（会设置初始密码并启动 `dist\windows-amd64\onlineTest.exe`，需先用 `build.ps1` 构建）。若 `data/` 已存在，环境变量不会修改已有账号密码。
 
 ## 配置
 

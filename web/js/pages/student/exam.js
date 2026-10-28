@@ -1,5 +1,5 @@
 import { api } from "../../api.js";
-import { renderRich } from "../../components/math-render.js";
+import { renderRich, richInline } from "../../components/math-render.js";
 import { createMathInput } from "../../components/math-input.js";
 import { questionFigure } from "../../components/question-figure.js";
 import { store } from "../../store.js";
@@ -120,7 +120,7 @@ export async function render(root, params) {
                 onchange: () => update([o.key]),
               }),
               el("span", { class: "option-key" }, o.key),
-              el("span", null, o.text)
+              el("span", null, richInline(o.text))
             )
           )
         );
@@ -138,7 +138,7 @@ export async function render(root, params) {
                 },
               }),
               el("span", { class: "option-key" }, o.key),
-              el("span", null, o.text)
+              el("span", null, richInline(o.text))
             )
           )
         );
@@ -254,7 +254,7 @@ export async function render(root, params) {
     const head = res.graded ? `${title} · 得 ${res.score} / ${res.max_score} 分` : title;
     return el("div", { class: `instant-feedback ${tone}`, dataset: { feedback: q.id } },
       el("div", { class: "instant-feedback-head" }, el("strong", null, head)),
-      el("div", { class: "instant-answer" }, "正确答案：", answerText(q, res.correct_answer)),
+      el("div", { class: "instant-answer" }, "正确答案：", richInline(answerText(q, res.correct_answer))),
       el("div", { class: "feedback-analysis" },
         "解题思路：",
         el("span", { dataset: { feedbackAnalysis: q.id } }, res.analysis || "暂无解析")

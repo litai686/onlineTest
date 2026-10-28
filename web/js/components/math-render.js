@@ -112,6 +112,22 @@ export async function renderRich(target, text, { block = true } = {}) {
   return target;
 }
 
+const LATEX_COMMAND = /\\[a-zA-Z]{2,}/;
+const CJK = /[\u3000-\u303f\u3400-\u9fff\uff00-\uffef]/;
+
+export function normalizeFormula(text) {
+  const raw = String(text ?? "");
+  if (raw.includes("$") || CJK.test(raw) || !LATEX_COMMAND.test(raw)) return raw;
+  return `$${raw.trim()}$`;
+}
+
+export function richInline(text) {
+  const raw = normalizeFormula(text);
+  const node = el("span", { class: "rich-inline" }, raw);
+  if (raw.includes("$")) renderRich(node, raw, { block: false }).catch(() => {});
+  return node;
+}
+
 export async function renderRichNode(text, options) {
   const node = el("div", { class: "rich" });
   await renderRich(node, text, options);
