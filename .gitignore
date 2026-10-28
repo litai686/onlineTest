@@ -1,0 +1,7 @@
+/data/
+/.tmp/
+/onlineTest
+/onlineTest.exe
+/*.log
+/config.json
+*.exe~
